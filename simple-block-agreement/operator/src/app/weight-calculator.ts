@@ -14,7 +14,13 @@ import {
   RESET,
 } from '../logging'
 import { getBAppToken, getStrategyToken } from './util'
+import { BasedAppsSDK } from "@ssv-labs/bapps-sdk";
 
+const sdk = new BasedAppsSDK({
+    bamGraphUrl: 'https://api.studio.thegraph.com/query/71118/based-applications-ssv-holesky/version/latest',
+    dvtGraphUrl: 'https://api.studio.thegraph.com/query/71118/ssv-network-holesky/version/latest',
+    beaconchainUrl: 'http://57.129.73.156:31101',
+});
 // ==================== Weight Formula ====================
 
 export type WeightFormula = (
@@ -209,6 +215,77 @@ export function calculateParticipantsWeight(
 
   return calculateFinalWeights(bApp, tokenWeights, validatorBalanceWeights, combinationFunction)
 }
+
+
+export async function calculateParticipantsWeightSDK(
+  bApp: BApp,
+  strategies: Strategy[],
+  weightFormula: WeightFormula,
+  combinationFunction: CombinationFunction,
+): Promise<Map<number, number>> {
+  try {
+    // Use the bApp's actual ID instead of hardcoding
+    const weights = await sdk.api.getParticipantWeights({
+      bAppId: "0x89EF15BC1E7495e3dDdc0013C0d2B049d487b2fD" as `0x${string}`
+    });
+
+    // Create token coefficients from strategy tokens
+    const tokenCoefficients = strategies[0].tokens.map(token => {
+      const tokenSymbol = config.tokenMap[token.address].symbol;
+      logToken(token.address, `🪙  Calculating token coefficient for ${tokenSymbol}`);
+      return {
+        token: token.address as `0x${string}`,
+        coefficient: 10
+      };
+    });
+
+    logVB('🪙  Calculating validator balance weights with coefficient: ' + bApp.validatorBalanceSignificance);
+
+    let simpleAverageStrategyWeights = sdk.utils.calcSimpleStrategyWeights(
+      weights,
+      {
+        coefficients: tokenCoefficients,
+        validatorCoefficient: bApp.validatorBalanceSignificance,
+      }
+    );
+
+    // Log raw weights before conversion
+    let log = '🧮 Raw Strategy Weights:\n';
+    simpleAverageStrategyWeights.forEach((value, key) => {
+      log += `  Strategy ${key}: ${GREEN}${value}${RESET}\n`;
+    });
+    console.log(log);
+
+    // Convert string keys to numbers and normalize
+    const numberKeyMap = new Map<number, number>();
+    let weightSum = 0;
+    
+    simpleAverageStrategyWeights.forEach((value) => {
+      weightSum += value;
+    });
+
+    if (weightSum === 0) weightSum = 1;
+
+    // Convert and normalize
+    simpleAverageStrategyWeights.forEach((value, key) => {
+      const normalizedWeight = value / weightSum;
+      const numericKey = Number(key);
+      numberKeyMap.set(numericKey, normalizedWeight);
+      logFinalWeightStrategy(
+        numericKey,
+        `Final normalized weight: ${GREEN}${(normalizedWeight * 100).toFixed(2)}%${RESET}`
+      );
+    });
+
+    logNormalizedFinalWeights(numberKeyMap, simpleAverageStrategyWeights);
+
+    return numberKeyMap;
+  } catch (error) {
+    console.error("Error in calculateParticipantsWeightSDK:", error);
+    return new Map();
+  }
+}
+
 
 // Calculate the final weights given the weights for each token and validator balance
 function calculateFinalWeights(

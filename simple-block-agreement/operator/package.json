@@ -12,11 +12,13 @@
     "test": "jest --config jest.config.js",
     "format:check": "prettier --check 'src/**/*.{ts,js}'",
     "format:write": "prettier --write 'src/**/*.{ts,js}'",
-    "start": "npm run build && npx ts-node src/index.ts"
+    "sdk": "NODE_OPTIONS='--experimental-strip-types --no-warnings' npx ts-node src/index.ts",
+    "start": "npx ts-node src/index.ts"
   },
   "dependencies": {
     "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.7.1",
+    "@ssv-labs/bapps-sdk": "^0.0.3",
     "console-table-printer": "^2.12.1",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",

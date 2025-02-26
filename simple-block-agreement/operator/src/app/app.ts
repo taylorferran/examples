@@ -6,6 +6,7 @@ import { ProtocolParticipant, SignedVote } from '../types/protocol-types'
 import {
   arithmeticCombinationFunction,
   calculateParticipantsWeight,
+  calculateParticipantsWeightSDK,
   exponentialWeightFormula,
   harmonicCombinationFunction,
   polynomialWeightFormula,
@@ -38,12 +39,12 @@ export class App implements AppInterface {
   }
 
   // Setup the app with a bApp configuration and a set of strategies that opted-in to the bApp
-  public Setup(
+  public async Setup(
     bApp: BApp,
     strategies: Strategy[],
     useExponentialWeight: boolean,
     useHarmonicCombinationFunction: boolean,
-  ): void {
+  ): Promise<void> {
     // Store bApp and participants
     this.bApp = bApp
     this.strategies = sanitizeStrategies(strategies)
@@ -59,26 +60,42 @@ export class App implements AppInterface {
     logCombinationFunction(useHarmonicCombinationFunction)
 
     // Compute weight for each participant
-    const weights = calculateParticipantsWeight(bApp, strategies, weightFunction, combinationFunction)
+    //const weights = calculateParticipantsWeight(bApp, strategies, weightFunction, combinationFunction)
 
-    // Create protocol participants
+    let weightsSDK;
+    try {
+      weightsSDK = await calculateParticipantsWeightSDK(bApp, strategies, weightFunction, combinationFunction)
+      //console.log("SDK Weights calculated successfully:", weightsSDK)
+    } catch (error) {
+      console.error("Error calculating SDK weights:", error);
+    }
+
     const participants = new Map<StrategyID, ProtocolParticipant>()
     for (const strategy of strategies) {
+      const weight = weightsSDK.get(strategy.id);
+      if (!weight) {
+        console.error(`No weight found for strategy ${strategy.id}`);
+        continue;
+      }
+      
       participants.set(strategy.id, {
         id: strategy.id,
-        weight: weights.get(strategy.id)!,
+        weight: weight,
         publicKey: this.cryptoService.getPublicKey(strategy.privateKey),
       })
     }
 
     // Create participants' state
     this.states = new Map<StrategyID, State>()
-    for (const strategy of strategies) {
+    // Process strategies in reverse order
+    for (let i = strategies.length - 1; i >= 0; i--) {
+      const strategy = strategies[i]
       this.states.set(
         strategy.id,
         new State(strategy.id, strategy.privateKey, participants, this.network, this.cryptoService),
       )
     }
+
   }
 
   // Broadcasts a vote to all participants
@@ -112,17 +129,17 @@ function sanitizeStrategies(strategies: Strategy[]): Strategy[] {
   return strategies
 }
 
-function weiToToken(weiAmount: bigint | string, decimals: number): number {
-  return Number(ethers.formatUnits(BigInt(weiAmount), decimals))
+function weiToToken(weiAmount: bigint, decimals: number): number {
+  return Number(ethers.formatUnits(weiAmount, decimals))
 }
 
-function sanitizeStrategyID(strategyID: number | string): number {
+function sanitizeStrategyID(strategyID: number | string): StrategyID {
   if (typeof strategyID === 'string') {
     const index = strategyID.indexOf('0x')
     if (index !== -1) {
       const numericPart = strategyID.substring(0, index)
-      return Number(numericPart)
+      return Number(numericPart) as StrategyID
     }
   }
-  return strategyID as number
+  return strategyID as StrategyID
 }

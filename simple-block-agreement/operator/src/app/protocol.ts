@@ -74,8 +74,8 @@ export class State {
 
   // Handles a new Ethereum block by creating a vote and broadcasting it
   public handleNewBlock(slot: Slot): void {
+    
     logStrategy(this.id, `📦 Handling new block with slot ${slot}.`)
-
     const vote: Vote = { slot }
     const signature = this.cryptoService.sign(vote, this.privateKey)
 

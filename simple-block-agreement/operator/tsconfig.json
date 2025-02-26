@@ -11,6 +11,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "tsBuildInfoFile": "./build/tsconfig.tsbuildinfo",
+    "noImplicitAny": false,
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "build"]
